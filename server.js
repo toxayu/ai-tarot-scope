@@ -54,10 +54,11 @@ function handleRating(req, res) {
   req.on('end', () => {
     try {
       const {model, rating} = JSON.parse(body || '{}');
-      if (!ratings[model]) ratings[model] = {total:0, count:0};
-      ratings[model].total += Number(rating);
-      ratings[model].count += 1;
-      const avg = ratings[model].total / ratings[model].count;
+      if (!ratings[model]) ratings[model] = {good: 0, bad: 0};
+      if (rating === 'good') ratings[model].good += 1;
+      if (rating === 'bad') ratings[model].bad += 1;
+      const total = ratings[model].good + ratings[model].bad;
+      const avg = total ? ratings[model].good / total : 0;
       res.writeHead(200, {'Content-Type': 'application/json'});
       res.end(JSON.stringify({average: avg}));
     } catch (err) {
