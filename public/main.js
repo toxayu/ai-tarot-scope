@@ -9,19 +9,29 @@ async function getReading() {
   const container = document.getElementById('results');
   container.innerHTML = '';
   const cardsDiv = document.createElement('div');
+  cardsDiv.className = 'cards';
   cardsDiv.innerHTML = '<h2>Cards</h2>' + data.cards.map(c => `<p><strong>${c.name}</strong>: ${c.meaning}</p>`).join('');
   container.appendChild(cardsDiv);
+
   const interpretationsDiv = document.createElement('div');
+  interpretationsDiv.className = 'interpretations';
   interpretationsDiv.innerHTML = '<h2>Interpretations</h2>';
+
   for (const model in data.interpretations) {
     const wrap = document.createElement('div');
+    wrap.className = 'interpretation';
     wrap.innerHTML = `<h3>${model}</h3><p>${data.interpretations[model]}</p>`;
+
     const ratingDiv = document.createElement('div');
-    ratingDiv.innerHTML = 'Rate: ' + [1,2,3,4,5].map(n => `<button data-model="${model}" data-rating="${n}">${n}</button>`).join(' ');
+    ratingDiv.className = 'rating';
+    ratingDiv.innerHTML = 'Rate: ' + ['good', 'bad']
+      .map(label => `<button class="rating-btn ${label}" data-model="${model}" data-rating="${label}">${label.charAt(0).toUpperCase() + label.slice(1)}</button>`)
+      .join(' ');
     wrap.appendChild(ratingDiv);
     interpretationsDiv.appendChild(wrap);
   }
   container.appendChild(interpretationsDiv);
+
   container.querySelectorAll('button[data-model]').forEach(btn => {
     btn.addEventListener('click', async () => {
       const model = btn.getAttribute('data-model');
@@ -32,7 +42,7 @@ async function getReading() {
         body: JSON.stringify({model, rating})
       });
       const result = await res.json();
-      alert(`${model} average rating: ${result.average.toFixed(2)}`);
+      alert(`${model} positive feedback: ${(result.average * 100).toFixed(1)}% good`);
     });
   });
 }
