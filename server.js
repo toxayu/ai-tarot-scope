@@ -1,6 +1,7 @@
 const http = require('http');
 const fs = require('fs');
 const path = require('path');
+const url = require('url');
 const {deck, drawCards} = require('./tarot');
 
 const models = ['anthropic/claude-sonnet-4', 'openai/chatgpt-4o-latest'];
@@ -29,22 +30,25 @@ async function getInterpretation(model, question, cards) {
 }
 
 function handleReading(req, res) {
-  let body = '';
-  req.on('data', chunk => body += chunk);
-  req.on('end', async () => {
-    try {
-      const {question} = JSON.parse(body || '{}');
-      const cards = drawCards();
-      const interpretations = {};
-      for (const model of models) {
-        interpretations[model] = await getInterpretation(model, question, cards);
-      }
-      res.writeHead(200, {'Content-Type': 'application/json'});
-      res.end(JSON.stringify({cards, interpretations}));
-    } catch (err) {
-      res.writeHead(500, {'Content-Type': 'application/json'});
-      res.end(JSON.stringify({error: err.message}));
+  const {query} = url.parse(req.url, true);
+  const question = query.question || '';
+  const cards = drawCards();
+  res.writeHead(200, {
+    'Content-Type': 'text/event-stream',
+    'Cache-Control': 'no-cache',
+    'Connection': 'keep-alive'
+  });
+  res.write(`event: cards\ndata: ${JSON.stringify(cards)}\n\n`);
+  (async () => {
+    for (const model of models) {
+      const text = await getInterpretation(model, question, cards);
+      res.write(`event: interpretation\ndata: ${JSON.stringify({model, text})}\n\n`);
     }
+    res.write('event: end\ndata: done\n\n');
+    res.end();
+  })().catch(err => {
+    res.write(`event: error\ndata: ${JSON.stringify({error: err.message})}\n\n`);
+    res.end();
   });
 }
 
@@ -83,7 +87,7 @@ function serveStatic(filePath, res) {
 }
 
 const server = http.createServer((req, res) => {
-  if (req.method === 'POST' && req.url === '/reading') return handleReading(req, res);
+  if (req.method === 'GET' && req.url.startsWith('/reading')) return handleReading(req, res);
   if (req.method === 'POST' && req.url === '/rating') return handleRating(req, res);
   // serve static files
   if (req.method === 'GET') {
