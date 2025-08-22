@@ -3,11 +3,12 @@ const fs = require('fs');
 const path = require('path');
 const {deck, drawCards} = require('./tarot');
 
-const models = ['gpt-3.5-turbo', 'gpt-4o-mini'];
+const models = ['anthropic/claude-sonnet-4', 'openai/chatgpt-4o-latest'];
 const ratings = {};
 
 async function getInterpretation(model, question, cards) {
-  const apiKey = process.env.OPENAI_API_KEY;
+  // const apiKey = process.env.OPENAI_API_KEY;
+  const apiKey = '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'
   if (!apiKey) {
     return `Missing OPENAI_API_KEY. Would ask ${model} about ${cards.map(c => c.name).join(', ')}`;
   }
@@ -15,7 +16,7 @@ async function getInterpretation(model, question, cards) {
     {role: 'system', content: 'You are a tarot expert.'},
     {role: 'user', content: `Question: ${question}. Cards: ${cards.map(c => `${c.name} (${c.meaning})`).join(', ')}`}
   ];
-  const response = await fetch('https://api.openai.com/v1/chat/completions', {
+  const response = await fetch('https://openrouter.ai/api/v1/chat/completions', {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
