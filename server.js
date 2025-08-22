@@ -7,26 +7,66 @@ const {deck, drawCards} = require('./tarot');
 const models = ['anthropic/claude-sonnet-4', 'openai/chatgpt-4o-latest'];
 const ratings = {};
 
-async function getInterpretation(model, question, cards) {
-  // const apiKey = process.env.OPENAI_API_KEY;
-  const apiKey = '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'
+async function getInterpretation(model, question, cards, onChunk) {
+  const apiKey = process.env.OPENROUTER_API_KEY;
   if (!apiKey) {
-    return `Missing OPENAI_API_KEY. Would ask ${model} about ${cards.map(c => c.name).join(', ')}`;
+    onChunk(
+      `Missing OPENROUTER_API_KEY. Would ask ${model} about ${cards
+        .map(c => c.name)
+        .join(', ')}`
+    );
+    return;
   }
   const messages = [
     {role: 'system', content: 'You are a tarot expert.'},
-    {role: 'user', content: `Question: ${question}. Cards: ${cards.map(c => `${c.name} (${c.meaning})`).join(', ')}`}
+    {
+      role: 'user',
+      content: `Question: ${question}. Cards: ${cards
+        .map(c => `${c.name} (${c.meaning})`)
+        .join(', ')}`
+    }
   ];
   const response = await fetch('https://openrouter.ai/api/v1/chat/completions', {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
-      'Authorization': `Bearer ${apiKey}`
+      Authorization: `Bearer ${apiKey}`
     },
-    body: JSON.stringify({model, messages})
+    body: JSON.stringify({model, messages, stream: true})
   });
-  const data = await response.json();
-  return data.choices?.[0]?.message?.content?.trim() || 'No interpretation available';
+
+  const reader = response.body?.getReader();
+  if (!reader) {
+    throw new Error('Response body is not readable');
+  }
+  const decoder = new TextDecoder();
+  let buffer = '';
+  try {
+    while (true) {
+      const {done, value} = await reader.read();
+      if (done) break;
+      buffer += decoder.decode(value, {stream: true});
+      while (true) {
+        const lineEnd = buffer.indexOf('\n');
+        if (lineEnd === -1) break;
+        const line = buffer.slice(0, lineEnd).trim();
+        buffer = buffer.slice(lineEnd + 1);
+        if (line.startsWith('data: ')) {
+          const data = line.slice(6);
+          if (data === '[DONE]') return;
+          try {
+            const parsed = JSON.parse(data);
+            const content = parsed.choices?.[0]?.delta?.content;
+            if (content) onChunk(content);
+          } catch (_) {
+            // ignore malformed JSON
+          }
+        }
+      }
+    }
+  } finally {
+    reader.cancel();
+  }
 }
 
 function handleReading(req, res) {
@@ -40,10 +80,18 @@ function handleReading(req, res) {
   });
   res.write(`event: cards\ndata: ${JSON.stringify(cards)}\n\n`);
   (async () => {
-    for (const model of models) {
-      const text = await getInterpretation(model, question, cards);
-      res.write(`event: interpretation\ndata: ${JSON.stringify({model, text})}\n\n`);
-    }
+    await Promise.all(
+      models.map(async model => {
+        await getInterpretation(model, question, cards, chunk => {
+          res.write(
+            `event: interpretation\ndata: ${JSON.stringify({model, text: chunk})}\n\n`
+          );
+        });
+        res.write(
+          `event: interpretation\ndata: ${JSON.stringify({model, done: true})}\n\n`
+        );
+      })
+    );
     res.write('event: end\ndata: done\n\n');
     res.end();
   })().catch(err => {
