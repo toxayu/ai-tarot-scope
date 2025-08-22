@@ -1,1 +1,22 @@
-# ai-tarot-scope
+# AI Tarot Scope
+
+A simple website for drawing tarot cards and comparing interpretations from multiple AI models. Users can rate each model's interpretation to see which resonates most.
+
+## Setup
+
+1. Install dependencies (none beyond Node.js).
+2. Set an `OPENAI_API_KEY` environment variable if you want live interpretations from OpenAI models.
+
+## Running
+
+```bash
+npm start
+```
+
+Then open `http://localhost:3000` in your browser.
+
+## Testing
+
+```bash
+npm test
+```
